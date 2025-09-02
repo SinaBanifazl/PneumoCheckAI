@@ -14,6 +14,7 @@ from matplotlib.patches import Rectangle
 IMG_SIZE = (224, 224)
 CLASS_NAMES = ['Normal', 'Pneumonia']
 model = None
+tooltip = None  # Tooltip widget
 
 # ------------------------- پیش‌بینی تصویر -------------------------
 def predict_image(img_path):
@@ -67,25 +68,20 @@ def open_file():
     if not file_path:
         return
 
-    # نمایش تصویر با قاب
     img = Image.open(file_path).resize((300, 300))
     img_tk = ImageTk.PhotoImage(img)
     image_label.config(image=img_tk)
     image_label.image = img_tk
 
-    # پیش‌بینی
     results = predict_image(file_path)
-
-    # نمایش درصدها
     result_text = ""
     for cls, prob in results.items():
         result_text += f"{cls}: {prob*100:.2f}%\n"
     result_label.config(text=result_text, fg="blue", font=("Arial", 14, "bold"))
 
-    # رسم نمودار با گرادیان، انیمیشن، لرزش و Glow
     animate_gradient_glow_bar_chart(results)
 
-# ------------------------- نمودار با گرادیان، لرزش و Glow -------------------------
+# ------------------------- نمودار با Glow، لرزش و Tooltip -------------------------
 def animate_gradient_glow_bar_chart(results):
     fig.clf()
     ax = fig.add_subplot(111)
@@ -101,7 +97,6 @@ def animate_gradient_glow_bar_chart(results):
     step = 1
     colors = [("limegreen", "darkgreen"), ("red", "darkred")]
 
-    # انیمیشن پر شدن
     def update_bars():
         done = True
         ax.cla()
@@ -124,16 +119,16 @@ def animate_gradient_glow_bar_chart(results):
             root.after(20, update_bars)
         else:
             shake_glow_bars(ax, current_values, colors, steps=5, magnitude=2)
+            add_tooltip(ax, current_values, colors)
 
     update_bars()
 
-# ------------------------- رسم میله با گرادیان و Glow -------------------------
+# ------------------------- رسم میله با Glow -------------------------
 def gradient_glow_rect(ax, idx, height, color_pair):
     n = 50
     for i in range(n):
         h = height*(i+1)/n
         base_color = interpolate_color(color_pair[0], color_pair[1], i/n)
-        # Glow effect: کم رنگ‌تر کردن و اضافه کردن alpha
         glow_color = np.clip(np.array(base_color)+0.2,0,1)
         rect = Rectangle((idx-0.4, h - height/n), 0.8, height/n, color=glow_color, linewidth=0)
         ax.add_patch(rect)
@@ -164,6 +159,30 @@ def shake_glow_bars(ax, heights, colors, steps=5, magnitude=2):
         if step_count < steps:
             root.after(50, lambda: shake_step(step_count+1))
     shake_step(0)
+
+# ------------------------- Tooltip روی میله‌ها -------------------------
+def add_tooltip(ax, heights, colors):
+    global tooltip
+    if tooltip:
+        tooltip.destroy()
+        tooltip = None
+
+    tooltip = tk.Label(root, text="", bg="yellow", fg="black", font=("Arial",10,"bold"), bd=1, relief="solid")
+    def motion(event):
+        for i, bar in enumerate(ax.patches):
+            bbox = bar.get_bbox()
+            x0, y0, x1, y1 = bbox.x0, bbox.y0, bbox.x1, bbox.y1
+            inv = ax.transData.inverted()
+            xdata, ydata = inv.transform([event.x, event.y])
+            if x0 <= xdata <= x1 and y0 <= ydata <= y1:
+                tooltip.config(text=f"{CLASS_NAMES[i]}: {heights[i]:.1f}%")
+                tooltip.place(x=event.x_root - root.winfo_rootx() + 10,
+                              y=event.y_root - root.winfo_rooty() + 10)
+                return
+        tooltip.place_forget()
+
+    canvas.get_tk_widget().bind("<Motion>", motion)
+    canvas.get_tk_widget().bind("<Leave>", lambda e: tooltip.place_forget())
 
 # ------------------------- ساخت پنجره -------------------------
 root = tk.Tk()
