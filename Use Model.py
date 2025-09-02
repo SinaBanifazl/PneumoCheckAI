@@ -82,11 +82,11 @@ def open_file():
         result_text += f"{cls}: {prob*100:.2f}%\n"
     result_label.config(text=result_text, fg="blue", font=("Arial", 14, "bold"))
 
-    # رسم نمودار با گرادیان و انیمیشن و لرزش
-    animate_gradient_bar_chart(results)
+    # رسم نمودار با گرادیان، انیمیشن، لرزش و Glow
+    animate_gradient_glow_bar_chart(results)
 
-# ------------------------- انیمیشن نمودار با لرزش -------------------------
-def animate_gradient_bar_chart(results):
+# ------------------------- نمودار با گرادیان، لرزش و Glow -------------------------
+def animate_gradient_glow_bar_chart(results):
     fig.clf()
     ax = fig.add_subplot(111)
     bars = ax.bar(results.keys(), [0,0], color=['white','white'], edgecolor='black', linewidth=1.5)
@@ -101,7 +101,7 @@ def animate_gradient_bar_chart(results):
     step = 1
     colors = [("limegreen", "darkgreen"), ("red", "darkred")]
 
-    # انیمیشن پر شدن میله‌ها
+    # انیمیشن پر شدن
     def update_bars():
         done = True
         ax.cla()
@@ -111,8 +111,7 @@ def animate_gradient_bar_chart(results):
                 if current_values[i] > target_values[i]:
                     current_values[i] = target_values[i]
                 done = False
-            # رسم میله با گرادیان
-            gradient_rect(ax, i, current_values[i], colors[i])
+            gradient_glow_rect(ax, i, current_values[i], colors[i])
             ax.text(i, current_values[i]+1, f"{current_values[i]:.1f}%", ha='center', va='bottom', fontweight='bold', fontsize=12)
         ax.set_xticks(range(len(results)))
         ax.set_xticklabels(results.keys(), fontsize=12, fontweight='bold')
@@ -124,18 +123,19 @@ def animate_gradient_bar_chart(results):
         if not done:
             root.after(20, update_bars)
         else:
-            # 🔹 پس از تکمیل، لرزش میله‌ها
-            shake_bars(ax, current_values, colors, steps=5, magnitude=2)
+            shake_glow_bars(ax, current_values, colors, steps=5, magnitude=2)
 
     update_bars()
 
-# ------------------------- رسم مستطیل با گرادیان -------------------------
-def gradient_rect(ax, idx, height, color_pair):
+# ------------------------- رسم میله با گرادیان و Glow -------------------------
+def gradient_glow_rect(ax, idx, height, color_pair):
     n = 50
     for i in range(n):
         h = height*(i+1)/n
-        color = interpolate_color(color_pair[0], color_pair[1], i/n)
-        rect = Rectangle((idx-0.4, h - height/n), 0.8, height/n, color=color, linewidth=0)
+        base_color = interpolate_color(color_pair[0], color_pair[1], i/n)
+        # Glow effect: کم رنگ‌تر کردن و اضافه کردن alpha
+        glow_color = np.clip(np.array(base_color)+0.2,0,1)
+        rect = Rectangle((idx-0.4, h - height/n), 0.8, height/n, color=glow_color, linewidth=0)
         ax.add_patch(rect)
 
 # ------------------------- ترکیب رنگ -------------------------
@@ -146,13 +146,13 @@ def interpolate_color(c1, c2, t):
     rgb = rgb1*(1-t)+rgb2*t
     return rgb
 
-# ------------------------- لرزش میله‌ها -------------------------
-def shake_bars(ax, heights, colors, steps=5, magnitude=2):
+# ------------------------- لرزش میله‌ها با Glow -------------------------
+def shake_glow_bars(ax, heights, colors, steps=5, magnitude=2):
     def shake_step(step_count):
         ax.cla()
         for i, h in enumerate(heights):
             shift = magnitude*np.sin(step_count*np.pi/steps)
-            gradient_rect(ax, i, h+shift, colors[i])
+            gradient_glow_rect(ax, i, h+shift, colors[i])
             ax.text(i, h+shift+1, f"{h:.1f}%", ha='center', va='bottom', fontweight='bold', fontsize=12)
         ax.set_xticks(range(len(CLASS_NAMES)))
         ax.set_xticklabels(CLASS_NAMES, fontsize=12, fontweight='bold')
