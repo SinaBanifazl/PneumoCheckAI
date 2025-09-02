@@ -9,12 +9,27 @@ import time
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
+import os
+import sys
 
 # ------------------------- تنظیمات -------------------------
 IMG_SIZE = (224, 224)
 CLASS_NAMES = ['Normal', 'Pneumonia']
 model = None
 tooltip = None  # Tooltip widget
+
+# ------------------------- پخش صدا -------------------------
+def play_sound():
+    try:
+        import winsound
+        winsound.Beep(1000, 300)  # فرکانس 1000Hz برای 300ms
+        winsound.Beep(1500, 300)
+    except:
+        try:
+            from playsound import playsound
+            playsound("ding.mp3")  # باید فایل ding.mp3 در پوشه باشه
+        except:
+            print("⚠️ صدا پخش نشد (ماژول/فایل یافت نشد).")
 
 # ------------------------- پیش‌بینی تصویر -------------------------
 def predict_image(img_path):
@@ -119,7 +134,6 @@ def animate_gradient_glow_bar_chart(results):
             root.after(20, update_bars)
         else:
             shake_glow_bars(ax, current_values, colors, steps=5, magnitude=2)
-            add_tooltip(ax, current_values, colors)
 
     update_bars()
 
@@ -158,6 +172,10 @@ def shake_glow_bars(ax, heights, colors, steps=5, magnitude=2):
         canvas.draw()
         if step_count < steps:
             root.after(50, lambda: shake_step(step_count+1))
+        else:
+            add_tooltip(ax, heights, colors)
+            play_sound()  # 🎶 صدا پخش می‌شود
+
     shake_step(0)
 
 # ------------------------- Tooltip روی میله‌ها -------------------------
