@@ -15,20 +15,21 @@ import os
 IMG_SIZE = (224, 224)
 CLASS_NAMES = ['Normal', 'Pneumonia']
 model = None
-tooltip = None  # Tooltip widget
+tooltip = None
+selected_image_path = None  # مسیر تصویر انتخاب شده
 
 # ------------------------- پخش صدا -------------------------
 def play_sound():
     try:
         import winsound
-        winsound.Beep(1000, 300)  
-        winsound.Beep(1500, 300)
+        winsound.Beep(1000, 200)
+        winsound.Beep(1500, 200)
     except:
         try:
             from playsound import playsound
-            playsound("ding.mp3")  # اگر فایل ding.mp3 در پوشه باشه
+            playsound("ding.mp3")
         except:
-            print("⚠️ صدا پخش نشد (ماژول/فایل یافت نشد).")
+            print("⚠️ صدا پخش نشد.")
 
 # ------------------------- پیش‌بینی تصویر -------------------------
 def predict_image(img_path):
@@ -49,7 +50,7 @@ def load_model_with_progress(path):
     status_label.config(text="در حال بارگذاری مدل...")
     select_model_btn.config(state="disabled")
     select_image_btn.config(state="disabled")
-
+    check_image_btn.config(state="disabled")
     def task():
         nonlocal path
         for i in range(1, 101):
@@ -66,20 +67,17 @@ def load_model_with_progress(path):
             status_label.config(text=f"❌ خطا: {e}")
         finally:
             select_model_btn.config(state="normal")
-
     threading.Thread(target=task, daemon=True).start()
 
 # ------------------------- انتخاب مدل -------------------------
 def open_model():
-    file_path = filedialog.askopenfilename(
-        title="انتخاب مدل",
-        filetypes=[("Model files", "*.h5 *.keras"), ("All files", "*.*")]
-    )
+    file_path = filedialog.askopenfilename(filetypes=[("Model files", "*.h5 *.keras")])
     if file_path:
         load_model_with_progress(file_path)
 
 # ------------------------- انتخاب تصویر -------------------------
 def open_file():
+    global selected_image_path
     if model is None:
         status_label.config(text="⚠️ ابتدا مدل را انتخاب کنید")
         return
@@ -90,37 +88,44 @@ def open_file():
     if not file_path:
         return
 
+    selected_image_path = file_path
+    img_pil = Image.open(file_path).convert("RGB").resize((320, 320))
+    img_tk = ImageTk.PhotoImage(img_pil)
+    image_label.config(image=img_tk)
+    image_label.image = img_tk
+    result_label.config(text="")
+    status_label.config(text="📷 تصویر آماده است، روی 'بررسی تصویر' کلیک کنید")
+    check_image_btn.config(state="normal")
+
+# ------------------------- بررسی تصویر -------------------------
+def check_image():
+    global selected_image_path
+    if not selected_image_path:
+        status_label.config(text="⚠️ تصویری انتخاب نشده")
+        return
+
+    check_image_btn.config(state="disabled")
     select_model_btn.config(state="disabled")
     select_image_btn.config(state="disabled")
     status_label.config(text="⏳ در حال پیش‌بینی...")
 
     def task():
         try:
-            # نمایش تصویر
-            img_pil = Image.open(file_path).convert("RGB").resize((320, 320))
-            img_tk = ImageTk.PhotoImage(img_pil)
-            image_label.config(image=img_tk)
-            image_label.image = img_tk
-
-            # پیش‌بینی
-            results = predict_image(file_path)
-
+            results = predict_image(selected_image_path)
             text = ""
             for cls, p in results.items():
                 text += f"{cls}: {p*100:.2f}%\n"
             result_label.config(text=text)
-
-            # انیمیشن نمودار
             root.after(100, lambda: animate_gradient_glow_bar_chart(results))
-
         except Exception as e:
             status_label.config(text=f"❌ خطا در پیش‌بینی: {e}")
+        finally:
             select_model_btn.config(state="normal")
             select_image_btn.config(state="normal")
 
     threading.Thread(target=task, daemon=True).start()
 
-# ------------------------- نمودار با Glow، لرزش و Tooltip -------------------------
+# ------------------------- نمودار با Glow -------------------------
 def animate_gradient_glow_bar_chart(results):
     fig.clf()
     ax = fig.add_subplot(111)
@@ -133,7 +138,7 @@ def animate_gradient_glow_bar_chart(results):
 
     target_values = [p*100 for p in results.values()]
     current_values = [0,0]
-    step = 1
+    step = 5   # 🔹 سریع‌تر شدن رشد میله‌ها
     colors = [("limegreen", "darkgreen"), ("red", "darkred")]
 
     def update_bars():
@@ -155,7 +160,7 @@ def animate_gradient_glow_bar_chart(results):
         ax.grid(axis='y', linestyle='--', alpha=0.7)
         canvas.draw()
         if not done:
-            root.after(20, update_bars)
+            root.after(10, update_bars)  # 🔹 سریع‌تر شدن انیمیشن
         else:
             shake_glow_bars(ax, current_values, colors, steps=5, magnitude=2)
 
@@ -171,7 +176,6 @@ def gradient_glow_rect(ax, idx, height, color_pair):
         rect = Rectangle((idx-0.4, h - height/n), 0.8, height/n, color=glow_color, linewidth=0)
         ax.add_patch(rect)
 
-# ------------------------- ترکیب رنگ -------------------------
 def interpolate_color(c1, c2, t):
     import matplotlib.colors as mcolors
     rgb1 = np.array(mcolors.to_rgb(c1))
@@ -179,7 +183,7 @@ def interpolate_color(c1, c2, t):
     rgb = rgb1*(1-t)+rgb2*t
     return rgb
 
-# ------------------------- لرزش میله‌ها با Glow -------------------------
+# ------------------------- لرزش میله‌ها -------------------------
 def shake_glow_bars(ax, heights, colors, steps=5, magnitude=2):
     def shake_step(step_count):
         ax.cla()
@@ -197,47 +201,17 @@ def shake_glow_bars(ax, heights, colors, steps=5, magnitude=2):
         if step_count < steps:
             root.after(50, lambda: shake_step(step_count+1))
         else:
-            add_tooltip(ax, heights, colors)
             play_sound()
-            # دکمه‌ها دوباره فعال می‌شوند
-            select_model_btn.config(state="normal")
-            select_image_btn.config(state="normal")
-            status_label.config(text="✅ آماده انتخاب تصویر جدید")
 
     shake_step(0)
-
-# ------------------------- Tooltip روی میله‌ها -------------------------
-def add_tooltip(ax, heights, colors):
-    global tooltip
-    if tooltip:
-        tooltip.destroy()
-        tooltip = None
-
-    tooltip = tk.Label(root, text="", bg="yellow", fg="black", font=("Arial",10,"bold"), bd=1, relief="solid")
-    def motion(event):
-        for i, bar in enumerate(ax.patches):
-            bbox = bar.get_bbox()
-            x0, y0, x1, y1 = bbox.x0, bbox.y0, bbox.x1, bbox.y1
-            inv = ax.transData.inverted()
-            xdata, ydata = inv.transform([event.x, event.y])
-            if x0 <= xdata <= x1 and y0 <= ydata <= y1:
-                tooltip.config(text=f"{CLASS_NAMES[i]}: {heights[i]:.1f}%")
-                tooltip.place(x=event.x_root - root.winfo_rootx() + 10,
-                              y=event.y_root - root.winfo_rooty() + 10)
-                return
-        tooltip.place_forget()
-
-    canvas.get_tk_widget().bind("<Motion>", motion)
-    canvas.get_tk_widget().bind("<Leave>", lambda e: tooltip.place_forget())
 
 # ------------------------- ساخت پنجره -------------------------
 root = tk.Tk()
 root.title("💉 تشخیص سینه‌پهلو از تصویر")
-root.geometry("700x750")
+root.geometry("720x800")
 root.configure(bg="#f0f8ff")
 
-select_model_btn = tk.Button(root, text="🔹 انتخاب مدل", command=open_model,
-                             font=("Arial", 12, "bold"), bg="#4682B4", fg="white", width=20)
+select_model_btn = tk.Button(root, text="🔹 انتخاب مدل", command=open_model, font=("Arial", 12, "bold"), bg="#4682B4", fg="white", width=20)
 select_model_btn.pack(pady=10)
 
 progress_bar = ttk.Progressbar(root, orient="horizontal", length=400, mode="determinate")
@@ -246,9 +220,11 @@ progress_bar.pack(pady=5)
 status_label = tk.Label(root, text="هیچ مدلی انتخاب نشده", font=("Arial", 10), bg="#f0f8ff")
 status_label.pack(pady=5)
 
-select_image_btn = tk.Button(root, text="📁 انتخاب تصویر", command=open_file,
-                             font=("Arial", 12, "bold"), bg="#32CD32", fg="white", width=20, state="disabled")
+select_image_btn = tk.Button(root, text="📁 انتخاب تصویر", command=open_file, font=("Arial", 12, "bold"), bg="#32CD32", fg="white", width=20, state="disabled")
 select_image_btn.pack(pady=10)
+
+check_image_btn = tk.Button(root, text="🔎 بررسی تصویر", command=check_image, font=("Arial", 12, "bold"), bg="#FFA500", fg="white", width=20, state="disabled")
+check_image_btn.pack(pady=10)
 
 image_label = tk.Label(root, bg="white", relief="solid", bd=2)
 image_label.pack(pady=10)
