@@ -8,6 +8,7 @@ import threading
 import time
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
 
 # ------------------------- تنظیمات -------------------------
 IMG_SIZE = (224, 224)
@@ -81,47 +82,73 @@ def open_file():
         result_text += f"{cls}: {prob*100:.2f}%\n"
     result_label.config(text=result_text, fg="blue", font=("Arial", 14, "bold"))
 
-    # 🟢 رسم نمودار میله‌ای با انیمیشن داخل GUI
-    animate_bar_chart(results)
+    # رسم نمودار میله‌ای با گرادیان و انیمیشن
+    animate_gradient_bar_chart(results)
 
-# ------------------------- تابع انیمیشن نمودار -------------------------
-def animate_bar_chart(results):
+# ------------------------- انیمیشن نمودار گرادیان -------------------------
+def animate_gradient_bar_chart(results):
     fig.clf()
     ax = fig.add_subplot(111)
-    bars = ax.bar(results.keys(), [0,0], color=['green','red'])
+    bars = ax.bar(results.keys(), [0,0], color=['white','white'], edgecolor='black', linewidth=1.5)
     ax.set_ylim(0, 100)
     ax.set_ylabel("Percentage (%)")
     ax.set_title("Prediction Probabilities")
     ax.grid(axis='y', linestyle='--', alpha=0.7)
-
     canvas.draw()
 
-    # انیمیشن پر شدن میله‌ها
     target_values = [p*100 for p in results.values()]
     current_values = [0,0]
     step = 1
 
+    # رنگ گرادیان از پایین به بالا
+    colors = [("limegreen", "darkgreen"), ("red", "darkred")]
+
     def update_bars():
         done = True
-        for i in range(len(bars)):
+        ax.cla()
+        for i, bar in enumerate(bars):
             if current_values[i] < target_values[i]:
                 current_values[i] += step
                 if current_values[i] > target_values[i]:
                     current_values[i] = target_values[i]
-                bars[i].set_height(current_values[i])
-                # نمایش درصد روی میله
-                ax.text(i, current_values[i]+1, f"{current_values[i]:.1f}%", ha='center', va='bottom', fontweight='bold')
                 done = False
+            # رسم میله با گرادیان
+            gradient_rect(ax, i, current_values[i], colors[i])
+            ax.text(i, current_values[i]+1, f"{current_values[i]:.1f}%", ha='center', va='bottom', fontweight='bold', fontsize=12)
+        ax.set_xticks(range(len(results)))
+        ax.set_xticklabels(results.keys(), fontsize=12, fontweight='bold')
+        ax.set_ylim(0, 100)
+        ax.set_ylabel("Percentage (%)")
+        ax.set_title("Prediction Probabilities")
+        ax.grid(axis='y', linestyle='--', alpha=0.7)
         canvas.draw()
         if not done:
-            root.after(20, update_bars)  # هر 20 میلی‌ثانیه به‌روزرسانی
+            root.after(20, update_bars)
 
     update_bars()
+
+# ------------------------- رسم مستطیل با گرادیان -------------------------
+def gradient_rect(ax, idx, height, color_pair):
+    from matplotlib.patches import Rectangle
+    n = 50  # تعداد نوارهای کوچک برای شبیه‌سازی گرادیان
+    for i in range(n):
+        h = height * (i+1)/n
+        color = interpolate_color(color_pair[0], color_pair[1], i/n)
+        rect = Rectangle((idx-0.4, h - height/n), 0.8, height/n, color=color, linewidth=0)
+        ax.add_patch(rect)
+
+# ------------------------- تابع ترکیب رنگ -------------------------
+def interpolate_color(c1, c2, t):
+    import matplotlib.colors as mcolors
+    rgb1 = np.array(mcolors.to_rgb(c1))
+    rgb2 = np.array(mcolors.to_rgb(c2))
+    rgb = rgb1*(1-t) + rgb2*t
+    return rgb
 
 # ------------------------- ساخت پنجره -------------------------
 root = tk.Tk()
 root.title("💉 تشخیص سینه‌پهلو از تصویر")
-root.geometry("700x650")
+root.geometry("700x700")
 root.configure(bg="#f0f8ff")
 
 # دکمه انتخاب مدل
@@ -148,7 +175,7 @@ result_label = tk.Label(root, text="", font=("Arial", 12), bg="#f0f8ff")
 result_label.pack(pady=5)
 
 # نمودار پیش‌بینی داخل GUI
-fig = plt.Figure(figsize=(5,3), dpi=100)
+fig = plt.Figure(figsize=(6,4), dpi=100)
 canvas = FigureCanvasTkAgg(fig, master=root)
 canvas.get_tk_widget().pack(pady=10)
 
