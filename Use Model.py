@@ -27,7 +27,7 @@ def predict_image(img_path):
     else:
         return {CLASS_NAMES[i]: float(predictions[0][i]) for i in range(len(CLASS_NAMES))}
 
-# ------------------------- بارگذاری مدل با Progress Bar -------------------------
+# ------------------------- بارگذاری مدل -------------------------
 def load_model_with_progress(path):
     global model
     progress_bar["value"] = 0
@@ -76,16 +76,16 @@ def open_file():
     # پیش‌بینی
     results = predict_image(file_path)
 
-    # نمایش درصدها با رنگ
+    # نمایش درصدها
     result_text = ""
     for cls, prob in results.items():
         result_text += f"{cls}: {prob*100:.2f}%\n"
     result_label.config(text=result_text, fg="blue", font=("Arial", 14, "bold"))
 
-    # رسم نمودار میله‌ای با گرادیان و انیمیشن
+    # رسم نمودار با گرادیان و انیمیشن و لرزش
     animate_gradient_bar_chart(results)
 
-# ------------------------- انیمیشن نمودار گرادیان -------------------------
+# ------------------------- انیمیشن نمودار با لرزش -------------------------
 def animate_gradient_bar_chart(results):
     fig.clf()
     ax = fig.add_subplot(111)
@@ -99,10 +99,9 @@ def animate_gradient_bar_chart(results):
     target_values = [p*100 for p in results.values()]
     current_values = [0,0]
     step = 1
-
-    # رنگ گرادیان از پایین به بالا
     colors = [("limegreen", "darkgreen"), ("red", "darkred")]
 
+    # انیمیشن پر شدن میله‌ها
     def update_bars():
         done = True
         ax.cla()
@@ -124,57 +123,72 @@ def animate_gradient_bar_chart(results):
         canvas.draw()
         if not done:
             root.after(20, update_bars)
+        else:
+            # 🔹 پس از تکمیل، لرزش میله‌ها
+            shake_bars(ax, current_values, colors, steps=5, magnitude=2)
 
     update_bars()
 
 # ------------------------- رسم مستطیل با گرادیان -------------------------
 def gradient_rect(ax, idx, height, color_pair):
-    from matplotlib.patches import Rectangle
-    n = 50  # تعداد نوارهای کوچک برای شبیه‌سازی گرادیان
+    n = 50
     for i in range(n):
-        h = height * (i+1)/n
+        h = height*(i+1)/n
         color = interpolate_color(color_pair[0], color_pair[1], i/n)
         rect = Rectangle((idx-0.4, h - height/n), 0.8, height/n, color=color, linewidth=0)
         ax.add_patch(rect)
 
-# ------------------------- تابع ترکیب رنگ -------------------------
+# ------------------------- ترکیب رنگ -------------------------
 def interpolate_color(c1, c2, t):
     import matplotlib.colors as mcolors
     rgb1 = np.array(mcolors.to_rgb(c1))
     rgb2 = np.array(mcolors.to_rgb(c2))
-    rgb = rgb1*(1-t) + rgb2*t
+    rgb = rgb1*(1-t)+rgb2*t
     return rgb
+
+# ------------------------- لرزش میله‌ها -------------------------
+def shake_bars(ax, heights, colors, steps=5, magnitude=2):
+    def shake_step(step_count):
+        ax.cla()
+        for i, h in enumerate(heights):
+            shift = magnitude*np.sin(step_count*np.pi/steps)
+            gradient_rect(ax, i, h+shift, colors[i])
+            ax.text(i, h+shift+1, f"{h:.1f}%", ha='center', va='bottom', fontweight='bold', fontsize=12)
+        ax.set_xticks(range(len(CLASS_NAMES)))
+        ax.set_xticklabels(CLASS_NAMES, fontsize=12, fontweight='bold')
+        ax.set_ylim(0, 100)
+        ax.set_ylabel("Percentage (%)")
+        ax.set_title("Prediction Probabilities")
+        ax.grid(axis='y', linestyle='--', alpha=0.7)
+        canvas.draw()
+        if step_count < steps:
+            root.after(50, lambda: shake_step(step_count+1))
+    shake_step(0)
 
 # ------------------------- ساخت پنجره -------------------------
 root = tk.Tk()
 root.title("💉 تشخیص سینه‌پهلو از تصویر")
-root.geometry("700x700")
+root.geometry("700x750")
 root.configure(bg="#f0f8ff")
 
-# دکمه انتخاب مدل
 select_model_btn = tk.Button(root, text="🔹 انتخاب مدل", command=open_model, font=("Arial", 12, "bold"), bg="#4682B4", fg="white", width=20)
 select_model_btn.pack(pady=10)
 
-# نوار پیشرفت
 progress_bar = ttk.Progressbar(root, orient="horizontal", length=400, mode="determinate")
 progress_bar.pack(pady=5)
 
 status_label = tk.Label(root, text="هیچ مدلی انتخاب نشده", font=("Arial", 10), bg="#f0f8ff")
 status_label.pack(pady=5)
 
-# دکمه انتخاب تصویر
 select_image_btn = tk.Button(root, text="📁 انتخاب تصویر", command=open_file, font=("Arial", 12, "bold"), bg="#32CD32", fg="white", width=20, state="disabled")
 select_image_btn.pack(pady=10)
 
-# نمایش تصویر
 image_label = tk.Label(root, bg="white", relief="solid", bd=2)
 image_label.pack(pady=10)
 
-# نتیجه متنی
 result_label = tk.Label(root, text="", font=("Arial", 12), bg="#f0f8ff")
 result_label.pack(pady=5)
 
-# نمودار پیش‌بینی داخل GUI
 fig = plt.Figure(figsize=(6,4), dpi=100)
 canvas = FigureCanvasTkAgg(fig, master=root)
 canvas.get_tk_widget().pack(pady=10)
