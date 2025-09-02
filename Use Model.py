@@ -78,24 +78,50 @@ def open_file():
     # نمایش درصدها با رنگ
     result_text = ""
     for cls, prob in results.items():
-        color = "green" if cls=="Normal" else "red"
         result_text += f"{cls}: {prob*100:.2f}%\n"
     result_label.config(text=result_text, fg="blue", font=("Arial", 14, "bold"))
 
-    # رسم نمودار میله‌ای داخل GUI
+    # 🟢 رسم نمودار میله‌ای با انیمیشن داخل GUI
+    animate_bar_chart(results)
+
+# ------------------------- تابع انیمیشن نمودار -------------------------
+def animate_bar_chart(results):
     fig.clf()
     ax = fig.add_subplot(111)
-    ax.bar(results.keys(), [p*100 for p in results.values()], color=['green','red'])
+    bars = ax.bar(results.keys(), [0,0], color=['green','red'])
     ax.set_ylim(0, 100)
     ax.set_ylabel("Percentage (%)")
     ax.set_title("Prediction Probabilities")
     ax.grid(axis='y', linestyle='--', alpha=0.7)
+
     canvas.draw()
+
+    # انیمیشن پر شدن میله‌ها
+    target_values = [p*100 for p in results.values()]
+    current_values = [0,0]
+    step = 1
+
+    def update_bars():
+        done = True
+        for i in range(len(bars)):
+            if current_values[i] < target_values[i]:
+                current_values[i] += step
+                if current_values[i] > target_values[i]:
+                    current_values[i] = target_values[i]
+                bars[i].set_height(current_values[i])
+                # نمایش درصد روی میله
+                ax.text(i, current_values[i]+1, f"{current_values[i]:.1f}%", ha='center', va='bottom', fontweight='bold')
+                done = False
+        canvas.draw()
+        if not done:
+            root.after(20, update_bars)  # هر 20 میلی‌ثانیه به‌روزرسانی
+
+    update_bars()
 
 # ------------------------- ساخت پنجره -------------------------
 root = tk.Tk()
 root.title("💉 تشخیص سینه‌پهلو از تصویر")
-root.geometry("650x600")
+root.geometry("700x650")
 root.configure(bg="#f0f8ff")
 
 # دکمه انتخاب مدل
